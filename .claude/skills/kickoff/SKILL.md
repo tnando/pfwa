@@ -29,12 +29,46 @@ Ask PM agent to:
 - Prioritize using MoSCoW method
 - Estimate story points
 
+### 1.5 Create GitHub Issues
+**Task:** Convert user stories to GitHub Issues
+**Output:** GitHub Issues with labels and assignments
+
+After PM creates user stories:
+- Parse user stories from the markdown file
+- For each user story, create a GitHub Issue using `gh issue create`
+- Apply labels:
+  - Epic label: `epic:<epic-name>` (e.g., `epic:auth`)
+  - Priority: `priority:high`, `priority:medium`, `priority:low`
+  - Agent assignment: `agent:backend`, `agent:frontend`, `agent:database`, etc.
+- Include acceptance criteria in issue body
+- Track issue numbers for reference
+
+Example:
+```bash
+gh issue create \
+  --title "User Registration" \
+  --body "$(cat <<'EOF'
+As a new user, I want to register an account, so that I can use the application.
+
+## Acceptance Criteria
+- [ ] User can enter email and password
+- [ ] Password meets security requirements
+- [ ] Email is validated and unique
+- [ ] User receives confirmation
+
+Refs: Epic 1 - Authentication
+EOF
+)" \
+  --label "epic:auth,priority:high,agent:backend"
+```
+
 ### 2. Architect (@architect)
 **Task:** Design API contracts and technical approach
 **Output:** `docs/api/<epic>-endpoints.yaml` or update `openapi.yaml`
 
 Ask Architect agent to:
 - Design REST endpoints based on user stories
+- Reference GitHub Issue numbers in API spec
 - Define request/response DTOs
 - Document error codes and edge cases
 - Create ADR if architectural decisions needed
@@ -95,8 +129,18 @@ For the provided argument "$ARGUMENTS":
    Save to docs/requirements/user-stories/
    ```
 
-3. **Progress through agents:**
+3. **Create GitHub Issues:**
+   After PM completes:
+   - Parse the user stories file
+   - Extract individual stories
+   - Determine epic label from argument
+   - Create GitHub Issue for each story using `gh issue create`
+   - Apply labels: epic, priority, agent assignment
+   - Capture issue numbers for tracking
+
+4. **Progress through agents:**
    After each agent completes, summarize what was created and hand off to the next agent with context.
+   Include GitHub Issue references in commits and documentation.
 
 4. **Track progress:**
    Create a checklist showing completion status for each agent.
@@ -109,9 +153,15 @@ Provide a summary after each agent:
 ## Kickoff Progress: $ARGUMENTS
 
 ### PM - User Stories
-- [ ] Created X user stories
-- [ ] Defined acceptance criteria
-- [ ] Saved to: docs/requirements/...
+- [x] Created X user stories
+- [x] Defined acceptance criteria
+- [x] Saved to: docs/requirements/...
+
+### GitHub Issues Created
+- [x] Issue #1: User Registration (priority:high, agent:backend)
+- [x] Issue #2: User Login (priority:high, agent:backend)
+- [x] Issue #3: Password Reset (priority:medium, agent:backend)
+- [x] Issue #4: Login Form UI (priority:high, agent:frontend)
 
 ### Architect - API Design
 - [ ] Designed X endpoints
@@ -142,6 +192,15 @@ Provide a summary after each agent:
 ## Notes
 
 - If backend/frontend projects don't exist yet, the first kickoff should scaffold them
-- Each agent should commit their work before handing off
+- Each agent should commit their work before handing off using `/commit`
+- Commits should reference GitHub Issue numbers (e.g., `Refs: #42`)
 - Use `/commit` skill for consistent commit messages
+- Agents should close issues in their PRs/commits when work is complete (e.g., `Closes #42`)
 - If blocked, note the blocker and continue with next agent where possible
+- Issue labels help identify which agent is responsible:
+  - `agent:backend` - Backend Developer
+  - `agent:frontend` - Frontend Developer
+  - `agent:database` - Database Architect
+  - `agent:devops` - DevOps Engineer
+  - `agent:qa` - QA Specialist
+  - `agent:architect` - Architect
