@@ -1,0 +1,32 @@
+{
+  "validUser": {
+    "email": "testuser@example.com",
+    "password": "SecurePass123!",
+    "firstName": "Test",
+    "lastName": "User"
+  },
+  "adminUser": {
+    "email": "admin@example.com",
+    "password": "AdminPass123!",
+    "firstName": "Admin",
+    "lastName": "User"
+  },
+  "invalidCredentials": {
+    "email": "wrong@example.com",
+    "password": "WrongPassword123!"
+  },
+  "weakPasswords": {
+    "tooShort": "Short1!",
+    "noUppercase": "password123!",
+    "noLowercase": "PASSWORD123!",
+    "noNumber": "Password!!!",
+    "noSpecial": "Password123"
+  },
+  "invalidEmails": [
+    "invalid-email",
+    "missing@domain",
+    "@nodomain.com",
+    "spaces in@email.com",
+    "double..dot@email.com"
+  ]
+}

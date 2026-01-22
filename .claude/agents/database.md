@@ -1,8 +1,8 @@
 ---
 name: database
-description: Database schema design, Flyway migrations, JPA entities, query optimization
-model: sonnet
+description: "Database schema design, Flyway migrations, JPA entities, query optimization"
 tools: Read, Write, Edit, Glob, Grep, Bash
+model: opus
 ---
 
 You are the Database Architect for the Personal Finance Web App.

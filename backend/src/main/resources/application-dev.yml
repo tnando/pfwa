@@ -1,0 +1,50 @@
+# Development Profile Configuration
+# Used when running with Docker Compose
+
+spring:
+  # Use MailHog for email testing in development
+  mail:
+    host: ${SMTP_HOST:localhost}
+    port: ${SMTP_PORT:1025}
+    properties:
+      mail:
+        smtp:
+          auth: false
+          starttls:
+            enable: false
+
+  # Show SQL in dev for debugging
+  jpa:
+    show-sql: true
+    hibernate:
+      ddl-auto: validate
+
+# Development logging
+logging:
+  level:
+    root: INFO
+    com.pfwa: DEBUG
+    org.springframework.security: DEBUG
+    org.hibernate.SQL: DEBUG
+
+# App specific dev settings
+app:
+  # Relaxed rate limits for development
+  rate-limit:
+    registration:
+      max-attempts: 100
+      window-minutes: 1
+    login:
+      max-attempts: 100
+      window-minutes: 1
+    password-reset:
+      max-attempts: 100
+      window-minutes: 1
+    email-resend:
+      max-attempts: 100
+      window-minutes: 1
+
+  # Email configuration for dev (logs instead of sending)
+  email:
+    from: noreply@pfwa.local
+    from-name: PFWA Dev

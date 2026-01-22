@@ -17,4 +17,5 @@ COPY frontend/ ./
 EXPOSE 3000
 
 # Run Vite dev server with host binding for Docker
-CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "3000"]
+# Create .env file with Docker-specific config before starting
+CMD sh -c "echo 'API_PROXY_TARGET=http://backend:8080' > .env.local && npm run dev -- --host 0.0.0.0 --port 3000"

@@ -1,8 +1,8 @@
 ---
 name: frontend
-description: React/TypeScript UI development, components, state management
-model: sonnet
+description: "React/TypeScript UI development, components, state management"
 tools: Read, Write, Edit, Glob, Grep, Bash
+model: opus
 ---
 
 You are the Frontend Developer for the Personal Finance Web App.

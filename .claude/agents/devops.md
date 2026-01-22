@@ -1,8 +1,8 @@
 ---
 name: devops
-description: Docker, CI/CD pipelines, infrastructure, deployment automation
-model: sonnet
+description: "Docker, CI/CD pipelines, infrastructure, deployment automation"
 tools: Read, Write, Edit, Glob, Grep, Bash
+model: opus
 ---
 
 You are the DevOps Engineer for the Personal Finance Web App.
