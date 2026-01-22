@@ -1,0 +1,80 @@
+spring:
+  application:
+    name: pfwa-backend-test
+
+  # Test Database Configuration (H2 in-memory or TestContainers)
+  datasource:
+    url: jdbc:h2:mem:testdb;MODE=PostgreSQL;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.H2Dialect
+
+  flyway:
+    enabled: false
+
+  # Disable mail in tests
+  mail:
+    host: localhost
+    port: 25
+
+# Server Configuration
+server:
+  port: 0  # Random port for tests
+
+# Application Configuration
+app:
+  jwt:
+    secret: test-secret-key-that-is-at-least-32-characters-long-for-testing
+    access-token-expiration-minutes: 15
+    refresh-token-expiration-days: 7
+    refresh-token-remember-me-days: 30
+    issuer: pfwa-test
+
+  security:
+    bcrypt-strength: 4  # Lower for faster tests
+    max-failed-login-attempts: 5
+    account-lockout-minutes: 30
+    max-sessions-per-user: 5
+
+  rate-limit:
+    registration:
+      max-attempts: 100  # Relaxed for tests
+      window-minutes: 1
+    login:
+      max-attempts: 100
+      window-minutes: 15
+    password-reset:
+      max-attempts: 100
+      window-minutes: 60
+    email-resend:
+      max-attempts: 100
+      window-minutes: 60
+
+  email:
+    from: test@pfwa.com
+    from-name: PFWA Test
+    verification-expiration-hours: 24
+    password-reset-expiration-hours: 1
+
+  frontend-url: http://localhost:3000
+
+cors:
+  allowed-origins: http://localhost:3000
+  allowed-methods: GET,POST,PUT,DELETE,OPTIONS
+  allowed-headers: "*"
+  allow-credentials: true
+  max-age: 3600
+
+logging:
+  level:
+    root: WARN
+    com.pfwa: DEBUG
