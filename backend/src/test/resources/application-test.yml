@@ -2,7 +2,8 @@ spring:
   application:
     name: pfwa-backend-test
 
-  # Test Database Configuration (H2 in-memory or TestContainers)
+  # Database Configuration - will be overridden by TestContainers when @Import(TestcontainersConfiguration.class) is used
+  # For unit tests without TestContainers, H2 is used
   datasource:
     url: jdbc:h2:mem:testdb;MODE=PostgreSQL;DB_CLOSE_DELAY=-1
     username: sa
@@ -21,10 +22,11 @@ spring:
   flyway:
     enabled: false
 
-  # Disable mail in tests
+  # Disable mail sending in tests - use mock
   mail:
     host: localhost
     port: 25
+    test-connection: false
 
 # Server Configuration
 server:
@@ -33,7 +35,7 @@ server:
 # Application Configuration
 app:
   jwt:
-    secret: test-secret-key-that-is-at-least-32-characters-long-for-testing
+    secret: test-secret-key-that-is-at-least-32-characters-long-for-testing-purposes-only
     access-token-expiration-minutes: 15
     refresh-token-expiration-days: 7
     refresh-token-remember-me-days: 30
@@ -78,3 +80,5 @@ logging:
   level:
     root: WARN
     com.pfwa: DEBUG
+    org.springframework.security: DEBUG
+    org.testcontainers: INFO

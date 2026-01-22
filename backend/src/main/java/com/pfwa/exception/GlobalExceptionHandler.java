@@ -290,6 +290,42 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Handles illegal argument exceptions (bad request parameters).
+     */
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ErrorResponse> handleIllegalArgument(
+            IllegalArgumentException ex,
+            HttpServletRequest request) {
+
+        logger.debug("Illegal argument on {}: {}", request.getRequestURI(), ex.getMessage());
+
+        return ResponseEntity.badRequest()
+                .body(ErrorResponse.of(
+                        "BAD_REQUEST",
+                        ex.getMessage(),
+                        request.getRequestURI()
+                ));
+    }
+
+    /**
+     * Handles illegal state exceptions (invalid operations).
+     */
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<ErrorResponse> handleIllegalState(
+            IllegalStateException ex,
+            HttpServletRequest request) {
+
+        logger.debug("Illegal state on {}: {}", request.getRequestURI(), ex.getMessage());
+
+        return ResponseEntity.badRequest()
+                .body(ErrorResponse.of(
+                        "BAD_REQUEST",
+                        ex.getMessage(),
+                        request.getRequestURI()
+                ));
+    }
+
+    /**
      * Handles all other exceptions as internal server errors.
      */
     @ExceptionHandler(Exception.class)
