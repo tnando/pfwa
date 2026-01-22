@@ -9,10 +9,23 @@ interface ExtendedAxiosRequestConfig extends InternalAxiosRequestConfig {
 }
 
 /**
+ * Get API base URL - uses VITE_API_BASE_URL if set, otherwise falls back to relative path
+ * For Docker: set VITE_API_BASE_URL=http://localhost:8080/api/v1
+ */
+const getBaseUrl = (): string => {
+  // Check for Vite environment variable (available in browser)
+  if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL;
+  }
+  // Default to relative path (works with Vite proxy or same-origin deployment)
+  return '/api/v1';
+};
+
+/**
  * Base Axios instance with default configuration
  */
 const api = axios.create({
-  baseURL: '/api/v1',
+  baseURL: getBaseUrl(),
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
