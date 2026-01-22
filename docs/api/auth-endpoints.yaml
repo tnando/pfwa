@@ -1,0 +1,1241 @@
+openapi: 3.0.3
+info:
+  title: PFWA Authentication API
+  description: |
+    Authentication API for the Personal Finance Web Application (PFWA).
+
+    This API provides endpoints for user registration, login, logout, token refresh,
+    password reset, email verification, and session management.
+
+    ## Authentication
+    Most endpoints require JWT Bearer authentication. Tokens are stored in HttpOnly cookies
+    and automatically sent with requests. The `Authorization` header is also supported.
+
+    ## Rate Limiting
+    All endpoints are rate-limited. When exceeded, a 429 response is returned with
+    a `Retry-After` header indicating when the client can retry.
+
+    ## Error Handling
+    All error responses follow a consistent format with error codes and field-level
+    validation errors where applicable.
+  version: 1.0.0
+  contact:
+    name: PFWA Development Team
+    email: dev@pfwa.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Local development server
+  - url: https://api.pfwa.com/api/v1
+    description: Production server
+
+tags:
+  - name: Authentication
+    description: User authentication operations (register, login, logout)
+  - name: Token
+    description: Token management (refresh, validation)
+  - name: Password
+    description: Password reset operations
+  - name: Email Verification
+    description: Email verification operations
+  - name: Sessions
+    description: Session management operations
+
+paths:
+  /auth/register:
+    post:
+      tags:
+        - Authentication
+      summary: Register a new user
+      description: |
+        Creates a new user account with the provided email and password.
+        A verification email is sent to the provided email address.
+
+        **Rate Limit:** 5 attempts per minute per IP address.
+      operationId: registerUser
+      parameters:
+        - $ref: '#/components/parameters/X-Request-ID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+            examples:
+              validRegistration:
+                summary: Valid registration request
+                value:
+                  email: "user@example.com"
+                  password: "SecurePass123!"
+                  confirmPassword: "SecurePass123!"
+      responses:
+        '201':
+          description: User registered successfully
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterResponse'
+              example:
+                message: "Registration successful. Please check your email to verify your account."
+                userId: "550e8400-e29b-41d4-a716-446655440000"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: Email already exists
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "CONFLICT"
+                message: "Email already exists"
+                timestamp: "2026-01-21T10:30:00Z"
+                path: "/api/v1/auth/register"
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: Authenticate user
+      description: |
+        Authenticates a user with email and password. On success, returns user profile
+        and sets HttpOnly cookies containing access and refresh tokens.
+
+        **Rate Limit:** 5 failed attempts per 15 minutes per email/IP combination.
+        Account is locked for 30 minutes after exceeding the limit.
+      operationId: loginUser
+      parameters:
+        - $ref: '#/components/parameters/X-Request-ID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            examples:
+              standardLogin:
+                summary: Standard login
+                value:
+                  email: "user@example.com"
+                  password: "SecurePass123!"
+                  rememberMe: false
+              rememberMeLogin:
+                summary: Login with remember me
+                value:
+                  email: "user@example.com"
+                  password: "SecurePass123!"
+                  rememberMe: true
+      responses:
+        '200':
+          description: Login successful
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+            Set-Cookie:
+              description: HttpOnly cookies containing access and refresh tokens
+              schema:
+                type: string
+              example: "accessToken=eyJhbGc...; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=900"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+              example:
+                user:
+                  id: "550e8400-e29b-41d4-a716-446655440000"
+                  email: "user@example.com"
+                  firstName: "John"
+                  lastName: "Doe"
+                expiresIn: 900
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: Invalid credentials
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "UNAUTHORIZED"
+                message: "Invalid email or password"
+                timestamp: "2026-01-21T10:30:00Z"
+                path: "/api/v1/auth/login"
+        '403':
+          description: Account locked or email not verified
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                accountLocked:
+                  summary: Account locked due to failed attempts
+                  value:
+                    error: "FORBIDDEN"
+                    message: "Account temporarily locked due to too many failed attempts. Please try again in 30 minutes."
+                    timestamp: "2026-01-21T10:30:00Z"
+                    path: "/api/v1/auth/login"
+                emailNotVerified:
+                  summary: Email not verified
+                  value:
+                    error: "FORBIDDEN"
+                    message: "Please verify your email before logging in"
+                    timestamp: "2026-01-21T10:30:00Z"
+                    path: "/api/v1/auth/login"
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auth/logout:
+    post:
+      tags:
+        - Authentication
+      summary: Logout user
+      description: |
+        Logs out the current user by invalidating the refresh token and clearing
+        authentication cookies. Only the current session is terminated.
+      operationId: logoutUser
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/X-Request-ID'
+      responses:
+        '200':
+          description: Logout successful
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+            Set-Cookie:
+              description: Cookies cleared
+              schema:
+                type: string
+              example: "accessToken=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+              example:
+                message: "Logged out successfully"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auth/refresh:
+    post:
+      tags:
+        - Token
+      summary: Refresh access token
+      description: |
+        Exchanges a valid refresh token for a new access token and refresh token pair.
+        This implements refresh token rotation for security. The old refresh token
+        is invalidated after use.
+
+        **Security:** If a refresh token is reused (already used previously), all
+        sessions for the user are invalidated as a security measure.
+      operationId: refreshToken
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/X-Request-ID'
+      responses:
+        '200':
+          description: Token refreshed successfully
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+            Set-Cookie:
+              description: New HttpOnly cookies containing rotated tokens
+              schema:
+                type: string
+              example: "accessToken=eyJhbGc...; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=900"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenRefreshResponse'
+              example:
+                expiresIn: 900
+        '401':
+          description: Invalid or expired refresh token
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+            Set-Cookie:
+              description: Cookies cleared on invalid token
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                expired:
+                  summary: Refresh token expired
+                  value:
+                    error: "UNAUTHORIZED"
+                    message: "Refresh token has expired. Please log in again."
+                    timestamp: "2026-01-21T10:30:00Z"
+                    path: "/api/v1/auth/refresh"
+                reused:
+                  summary: Token reuse detected (security breach)
+                  value:
+                    error: "UNAUTHORIZED"
+                    message: "Security alert: Token reuse detected. All sessions have been invalidated."
+                    timestamp: "2026-01-21T10:30:00Z"
+                    path: "/api/v1/auth/refresh"
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auth/password/forgot:
+    post:
+      tags:
+        - Password
+      summary: Request password reset
+      description: |
+        Initiates the password reset process by sending a reset link to the
+        provided email address. For security reasons, the response is always
+        successful regardless of whether the email exists in the system.
+
+        **Rate Limit:** 3 requests per hour per email address.
+      operationId: forgotPassword
+      parameters:
+        - $ref: '#/components/parameters/X-Request-ID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForgotPasswordRequest'
+            example:
+              email: "user@example.com"
+      responses:
+        '200':
+          description: Password reset email sent (if email exists)
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+              example:
+                message: "If the email exists in our system, you will receive a password reset link."
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auth/password/reset:
+    post:
+      tags:
+        - Password
+      summary: Complete password reset
+      description: |
+        Resets the user's password using the token received via email.
+        On success, all existing sessions are invalidated and the user
+        must log in with the new password.
+
+        The reset token is single-use and expires after 1 hour.
+      operationId: resetPassword
+      parameters:
+        - $ref: '#/components/parameters/X-Request-ID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordRequest'
+            example:
+              token: "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6"
+              newPassword: "NewSecurePass123!"
+              confirmPassword: "NewSecurePass123!"
+      responses:
+        '200':
+          description: Password reset successful
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+              example:
+                message: "Password has been reset successfully. Please log in with your new password."
+        '400':
+          description: Validation error or token issues
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                validationError:
+                  summary: Password validation failed
+                  value:
+                    error: "VALIDATION_ERROR"
+                    message: "Validation failed"
+                    timestamp: "2026-01-21T10:30:00Z"
+                    path: "/api/v1/auth/password/reset"
+                    fieldErrors:
+                      - field: "newPassword"
+                        message: "Password must contain at least one special character"
+                        code: "password.special.required"
+                tokenExpired:
+                  summary: Reset token expired
+                  value:
+                    error: "BAD_REQUEST"
+                    message: "Password reset link has expired. Please request a new one."
+                    timestamp: "2026-01-21T10:30:00Z"
+                    path: "/api/v1/auth/password/reset"
+                tokenUsed:
+                  summary: Reset token already used
+                  value:
+                    error: "BAD_REQUEST"
+                    message: "This password reset link has already been used."
+                    timestamp: "2026-01-21T10:30:00Z"
+                    path: "/api/v1/auth/password/reset"
+        '404':
+          description: Invalid reset token
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "NOT_FOUND"
+                message: "Invalid password reset token"
+                timestamp: "2026-01-21T10:30:00Z"
+                path: "/api/v1/auth/password/reset"
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auth/verify-email:
+    post:
+      tags:
+        - Email Verification
+      summary: Verify email address
+      description: |
+        Verifies the user's email address using the token sent via email.
+        On success, the user's account status changes from PENDING_VERIFICATION to ACTIVE.
+
+        The verification token expires after 24 hours.
+      operationId: verifyEmail
+      parameters:
+        - $ref: '#/components/parameters/X-Request-ID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyEmailRequest'
+            example:
+              token: "a1b2c3d4-e5f6-g7h8-i9j0-k1l2m3n4o5p6"
+      responses:
+        '200':
+          description: Email verified successfully
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+              example:
+                message: "Email verified successfully. You can now log in."
+        '400':
+          description: Token expired or already used
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                expired:
+                  summary: Verification link expired
+                  value:
+                    error: "BAD_REQUEST"
+                    message: "Verification link has expired. Please request a new one."
+                    timestamp: "2026-01-21T10:30:00Z"
+                    path: "/api/v1/auth/verify-email"
+                alreadyVerified:
+                  summary: Email already verified
+                  value:
+                    error: "BAD_REQUEST"
+                    message: "Email has already been verified."
+                    timestamp: "2026-01-21T10:30:00Z"
+                    path: "/api/v1/auth/verify-email"
+        '404':
+          description: Invalid verification token
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "NOT_FOUND"
+                message: "Invalid verification token"
+                timestamp: "2026-01-21T10:30:00Z"
+                path: "/api/v1/auth/verify-email"
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auth/verify-email/resend:
+    post:
+      tags:
+        - Email Verification
+      summary: Resend verification email
+      description: |
+        Resends the email verification link to the user's email address.
+        Previous verification tokens are invalidated.
+
+        **Rate Limit:** 3 emails per hour per user.
+      operationId: resendVerificationEmail
+      parameters:
+        - $ref: '#/components/parameters/X-Request-ID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResendVerificationRequest'
+            example:
+              email: "user@example.com"
+      responses:
+        '200':
+          description: Verification email sent
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+              example:
+                message: "Verification email sent."
+        '400':
+          description: Email already verified
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "BAD_REQUEST"
+                message: "Email has already been verified."
+                timestamp: "2026-01-21T10:30:00Z"
+                path: "/api/v1/auth/verify-email/resend"
+        '404':
+          description: Email not found (for security, may return 200 instead)
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auth/sessions:
+    get:
+      tags:
+        - Sessions
+      summary: Get active sessions
+      description: |
+        Returns a list of all active sessions for the authenticated user,
+        including device information, location, and last activity timestamp.
+      operationId: getActiveSessions
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/X-Request-ID'
+      responses:
+        '200':
+          description: List of active sessions
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionListResponse'
+              example:
+                sessions:
+                  - id: "550e8400-e29b-41d4-a716-446655440001"
+                    deviceType: "Chrome 120 on macOS"
+                    location: "San Francisco, US"
+                    ipAddress: "192.168.1.1"
+                    lastActive: "2026-01-21T10:30:00Z"
+                    createdAt: "2026-01-15T08:00:00Z"
+                    isCurrent: true
+                  - id: "550e8400-e29b-41d4-a716-446655440002"
+                    deviceType: "Safari on iPhone"
+                    location: "San Francisco, US"
+                    ipAddress: "192.168.1.2"
+                    lastActive: "2026-01-20T18:45:00Z"
+                    createdAt: "2026-01-10T12:00:00Z"
+                    isCurrent: false
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete:
+      tags:
+        - Sessions
+      summary: Logout all sessions
+      description: |
+        Terminates all active sessions for the authenticated user across all devices.
+        The user will need to log in again on all devices.
+
+        A security notification email is sent to the user.
+      operationId: logoutAllSessions
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/X-Request-ID'
+      responses:
+        '200':
+          description: All sessions terminated
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+            Set-Cookie:
+              description: Cookies cleared
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+              example:
+                message: "All sessions have been terminated. You will need to log in again on all devices."
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auth/sessions/{sessionId}:
+    delete:
+      tags:
+        - Sessions
+      summary: Revoke specific session
+      description: |
+        Terminates a specific session identified by its ID. This allows users to
+        revoke access from devices they no longer use or don't recognize.
+
+        Users cannot revoke their current session using this endpoint (use /auth/logout instead).
+      operationId: revokeSession
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/X-Request-ID'
+        - name: sessionId
+          in: path
+          required: true
+          description: The unique identifier of the session to revoke
+          schema:
+            type: string
+            format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440001"
+      responses:
+        '200':
+          description: Session revoked successfully
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+              example:
+                message: "Session revoked successfully"
+        '400':
+          description: Cannot revoke current session
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "BAD_REQUEST"
+                message: "Cannot revoke current session. Use logout instead."
+                timestamp: "2026-01-21T10:30:00Z"
+                path: "/api/v1/auth/sessions/550e8400-e29b-41d4-a716-446655440001"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Session belongs to another user
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "FORBIDDEN"
+                message: "You do not have permission to revoke this session"
+                timestamp: "2026-01-21T10:30:00Z"
+                path: "/api/v1/auth/sessions/550e8400-e29b-41d4-a716-446655440001"
+        '404':
+          description: Session not found
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "NOT_FOUND"
+                message: "Session not found"
+                timestamp: "2026-01-21T10:30:00Z"
+                path: "/api/v1/auth/sessions/550e8400-e29b-41d4-a716-446655440001"
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT access token in Authorization header
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: accessToken
+      description: JWT access token in HttpOnly cookie
+
+  parameters:
+    X-Request-ID:
+      name: X-Request-ID
+      in: header
+      required: false
+      description: Unique identifier for request tracing. Generated by client or server.
+      schema:
+        type: string
+        format: uuid
+      example: "550e8400-e29b-41d4-a716-446655440000"
+
+  headers:
+    X-Request-ID:
+      description: Request identifier for tracing
+      schema:
+        type: string
+        format: uuid
+      example: "550e8400-e29b-41d4-a716-446655440000"
+
+  schemas:
+    # ==================== Request DTOs ====================
+
+    RegisterRequest:
+      type: object
+      required:
+        - email
+        - password
+        - confirmPassword
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 5
+          maxLength: 255
+          description: User's email address. Must be unique and valid format.
+          example: "user@example.com"
+        password:
+          type: string
+          format: password
+          minLength: 8
+          maxLength: 128
+          description: |
+            User's password. Must meet security requirements:
+            - Minimum 8 characters
+            - At least one uppercase letter (A-Z)
+            - At least one lowercase letter (a-z)
+            - At least one digit (0-9)
+            - At least one special character (!@#$%^&*()_+-=[]{}|;:,.<>?)
+          example: "SecurePass123!"
+        confirmPassword:
+          type: string
+          format: password
+          minLength: 8
+          maxLength: 128
+          description: Must match the password field exactly.
+          example: "SecurePass123!"
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 255
+          description: User's registered email address.
+          example: "user@example.com"
+        password:
+          type: string
+          format: password
+          maxLength: 128
+          description: User's password.
+          example: "SecurePass123!"
+        rememberMe:
+          type: boolean
+          default: false
+          description: |
+            If true, the refresh token expires in 30 days instead of 7 days.
+          example: false
+
+    ForgotPasswordRequest:
+      type: object
+      required:
+        - email
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 255
+          description: Email address associated with the account.
+          example: "user@example.com"
+
+    ResetPasswordRequest:
+      type: object
+      required:
+        - token
+        - newPassword
+        - confirmPassword
+      properties:
+        token:
+          type: string
+          minLength: 32
+          maxLength: 64
+          description: Password reset token received via email.
+          example: "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6"
+        newPassword:
+          type: string
+          format: password
+          minLength: 8
+          maxLength: 128
+          description: |
+            New password. Must meet the same security requirements as registration:
+            - Minimum 8 characters
+            - At least one uppercase letter (A-Z)
+            - At least one lowercase letter (a-z)
+            - At least one digit (0-9)
+            - At least one special character
+          example: "NewSecurePass123!"
+        confirmPassword:
+          type: string
+          format: password
+          minLength: 8
+          maxLength: 128
+          description: Must match the newPassword field exactly.
+          example: "NewSecurePass123!"
+
+    VerifyEmailRequest:
+      type: object
+      required:
+        - token
+      properties:
+        token:
+          type: string
+          format: uuid
+          description: Email verification token received via email.
+          example: "a1b2c3d4-e5f6-g7h8-i9j0-k1l2m3n4o5p6"
+
+    ResendVerificationRequest:
+      type: object
+      required:
+        - email
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 255
+          description: Email address to resend verification to.
+          example: "user@example.com"
+
+    # ==================== Response DTOs ====================
+
+    RegisterResponse:
+      type: object
+      required:
+        - message
+        - userId
+      properties:
+        message:
+          type: string
+          description: Success message with instructions.
+          example: "Registration successful. Please check your email to verify your account."
+        userId:
+          type: string
+          format: uuid
+          description: The unique identifier of the newly created user.
+          example: "550e8400-e29b-41d4-a716-446655440000"
+
+    LoginResponse:
+      type: object
+      required:
+        - user
+        - expiresIn
+      properties:
+        user:
+          $ref: '#/components/schemas/UserProfile'
+        expiresIn:
+          type: integer
+          description: Access token expiration time in seconds.
+          example: 900
+
+    UserProfile:
+      type: object
+      required:
+        - id
+        - email
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: User's unique identifier.
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        email:
+          type: string
+          format: email
+          description: User's email address.
+          example: "user@example.com"
+        firstName:
+          type: string
+          maxLength: 100
+          nullable: true
+          description: User's first name (may be null if not set).
+          example: "John"
+        lastName:
+          type: string
+          maxLength: 100
+          nullable: true
+          description: User's last name (may be null if not set).
+          example: "Doe"
+
+    TokenRefreshResponse:
+      type: object
+      required:
+        - expiresIn
+      properties:
+        expiresIn:
+          type: integer
+          description: New access token expiration time in seconds.
+          example: 900
+
+    MessageResponse:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          description: Response message.
+          example: "Operation completed successfully"
+
+    SessionListResponse:
+      type: object
+      required:
+        - sessions
+      properties:
+        sessions:
+          type: array
+          description: List of active sessions.
+          items:
+            $ref: '#/components/schemas/Session'
+
+    Session:
+      type: object
+      required:
+        - id
+        - deviceType
+        - lastActive
+        - createdAt
+        - isCurrent
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Session unique identifier.
+          example: "550e8400-e29b-41d4-a716-446655440001"
+        deviceType:
+          type: string
+          description: Browser and operating system information.
+          example: "Chrome 120 on macOS"
+        location:
+          type: string
+          nullable: true
+          description: Approximate location based on IP address (city, country).
+          example: "San Francisco, US"
+        ipAddress:
+          type: string
+          description: IP address of the session (partially masked for privacy).
+          example: "192.168.x.x"
+        lastActive:
+          type: string
+          format: date-time
+          description: Timestamp of last activity.
+          example: "2026-01-21T10:30:00Z"
+        createdAt:
+          type: string
+          format: date-time
+          description: Timestamp when session was created.
+          example: "2026-01-15T08:00:00Z"
+        isCurrent:
+          type: boolean
+          description: Whether this is the session making the request.
+          example: true
+
+    # ==================== Error DTOs ====================
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+        - timestamp
+        - path
+      properties:
+        error:
+          type: string
+          description: Error code for programmatic handling.
+          enum:
+            - BAD_REQUEST
+            - VALIDATION_ERROR
+            - UNAUTHORIZED
+            - FORBIDDEN
+            - NOT_FOUND
+            - CONFLICT
+            - TOO_MANY_REQUESTS
+            - INTERNAL_SERVER_ERROR
+          example: "VALIDATION_ERROR"
+        message:
+          type: string
+          description: Human-readable error message.
+          example: "Validation failed"
+        timestamp:
+          type: string
+          format: date-time
+          description: When the error occurred.
+          example: "2026-01-21T10:30:00Z"
+        path:
+          type: string
+          description: The API path that was called.
+          example: "/api/v1/auth/register"
+        requestId:
+          type: string
+          format: uuid
+          description: Request identifier for troubleshooting.
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        fieldErrors:
+          type: array
+          description: Field-level validation errors (present for VALIDATION_ERROR).
+          items:
+            $ref: '#/components/schemas/FieldError'
+
+    FieldError:
+      type: object
+      required:
+        - field
+        - message
+        - code
+      properties:
+        field:
+          type: string
+          description: The field that failed validation.
+          example: "password"
+        message:
+          type: string
+          description: Human-readable error message.
+          example: "Password must contain at least one uppercase letter"
+        code:
+          type: string
+          description: Error code for programmatic handling.
+          example: "password.uppercase.required"
+        rejectedValue:
+          type: string
+          nullable: true
+          description: The value that was rejected (masked for sensitive fields).
+          example: null
+
+  responses:
+    BadRequest:
+      description: Invalid request body or parameters
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/X-Request-ID'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            validationError:
+              summary: Field validation error
+              value:
+                error: "VALIDATION_ERROR"
+                message: "Validation failed"
+                timestamp: "2026-01-21T10:30:00Z"
+                path: "/api/v1/auth/register"
+                fieldErrors:
+                  - field: "email"
+                    message: "Invalid email format"
+                    code: "email.format.invalid"
+                  - field: "password"
+                    message: "Password must be at least 8 characters"
+                    code: "password.length.min"
+            passwordMismatch:
+              summary: Passwords do not match
+              value:
+                error: "VALIDATION_ERROR"
+                message: "Validation failed"
+                timestamp: "2026-01-21T10:30:00Z"
+                path: "/api/v1/auth/register"
+                fieldErrors:
+                  - field: "confirmPassword"
+                    message: "Passwords do not match"
+                    code: "password.mismatch"
+
+    Unauthorized:
+      description: Authentication required or invalid credentials
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/X-Request-ID'
+        WWW-Authenticate:
+          description: Authentication challenge
+          schema:
+            type: string
+          example: "Bearer realm=\"pfwa\", error=\"invalid_token\""
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "UNAUTHORIZED"
+            message: "Authentication required"
+            timestamp: "2026-01-21T10:30:00Z"
+            path: "/api/v1/auth/sessions"
+
+    Forbidden:
+      description: Insufficient permissions
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/X-Request-ID'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "FORBIDDEN"
+            message: "You do not have permission to perform this action"
+            timestamp: "2026-01-21T10:30:00Z"
+            path: "/api/v1/auth/sessions/123"
+
+    NotFound:
+      description: Resource not found
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/X-Request-ID'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "NOT_FOUND"
+            message: "Resource not found"
+            timestamp: "2026-01-21T10:30:00Z"
+            path: "/api/v1/auth/sessions/invalid-id"
+
+    TooManyRequests:
+      description: Rate limit exceeded
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/X-Request-ID'
+        Retry-After:
+          description: Seconds until the rate limit resets
+          schema:
+            type: integer
+          example: 60
+        X-RateLimit-Limit:
+          description: Request limit per window
+          schema:
+            type: integer
+          example: 5
+        X-RateLimit-Remaining:
+          description: Remaining requests in current window
+          schema:
+            type: integer
+          example: 0
+        X-RateLimit-Reset:
+          description: Unix timestamp when the rate limit resets
+          schema:
+            type: integer
+          example: 1705833060
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "TOO_MANY_REQUESTS"
+            message: "Too many requests. Please try again later."
+            timestamp: "2026-01-21T10:30:00Z"
+            path: "/api/v1/auth/register"
+
+    InternalServerError:
+      description: Unexpected server error
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/X-Request-ID'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "INTERNAL_SERVER_ERROR"
+            message: "An unexpected error occurred. Please try again later."
+            timestamp: "2026-01-21T10:30:00Z"
+            path: "/api/v1/auth/register"
+            requestId: "550e8400-e29b-41d4-a716-446655440000"
