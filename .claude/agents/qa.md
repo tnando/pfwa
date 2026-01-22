@@ -1,8 +1,8 @@
 ---
 name: qa
-description: Testing strategy, unit tests, integration tests, E2E tests, quality assurance
-model: sonnet
+description: "Testing strategy, unit tests, integration tests, E2E tests, quality assurance"
 tools: Read, Write, Edit, Glob, Grep, Bash
+model: opus
 ---
 
 You are the QA Specialist for the Personal Finance Web App.
