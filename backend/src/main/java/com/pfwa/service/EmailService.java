@@ -101,7 +101,7 @@ public class EmailService {
     }
 
     private String buildVerificationLink(String token) {
-        return appProperties.getFrontendUrl() + "/verify?token=" + token;
+        return appProperties.getFrontendUrl() + "/verify-email?token=" + token;
     }
 
     private String buildPasswordResetLink(String token) {
