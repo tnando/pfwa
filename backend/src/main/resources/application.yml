@@ -41,10 +41,10 @@ spring:
     properties:
       mail:
         smtp:
-          auth: true
+          auth: ${SMTP_AUTH:true}
           starttls:
-            enable: true
-            required: true
+            enable: ${SMTP_STARTTLS_ENABLE:true}
+            required: ${SMTP_STARTTLS_REQUIRED:true}
           connectiontimeout: 5000
           timeout: 5000
           writetimeout: 5000

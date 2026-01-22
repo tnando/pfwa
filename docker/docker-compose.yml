@@ -38,6 +38,17 @@ services:
       db:
         condition: service_healthy
 
+  # MailHog - Email Testing (catches all outgoing emails)
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: pfwa-mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025"  # SMTP server
+      - "8025:8025"  # Web UI
+    profiles:
+      - full
+
   # Spring Boot Backend
   backend:
     build:
@@ -53,12 +64,20 @@ services:
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-pfwa}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-pfwa_dev_password}
       JWT_SECRET: ${JWT_SECRET:-dev-secret-key-change-in-production-min-32-chars}
+      SMTP_HOST: mailhog
+      SMTP_PORT: 1025
+      SMTP_AUTH: "false"
+      SMTP_STARTTLS_ENABLE: "false"
+      SMTP_STARTTLS_REQUIRED: "false"
+      FRONTEND_URL: http://localhost:3000
     volumes:
       - ../backend:/app
       - maven_cache:/root/.m2
     depends_on:
       db:
         condition: service_healthy
+      mailhog:
+        condition: service_started
     profiles:
       - full
 
@@ -72,7 +91,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      VITE_API_URL: http://localhost:8080/api
+      VITE_API_URL: http://backend:8080
     volumes:
       - ../frontend:/app
       - /app/node_modules
