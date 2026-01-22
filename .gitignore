@@ -17,6 +17,7 @@ backend/build/
 
 # Environment
 .env
+!.env.example
 .env.local
 *.local
 

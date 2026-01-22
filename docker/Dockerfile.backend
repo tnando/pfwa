@@ -1,0 +1,24 @@
+# Backend Dockerfile for Spring Boot
+# Development version with hot-reload support
+
+FROM eclipse-temurin:17-jdk-alpine
+
+WORKDIR /app
+
+# Install Maven
+RUN apk add --no-cache maven
+
+# Copy Maven files for dependency caching
+COPY backend/pom.xml ./pom.xml
+
+# Download dependencies (cached layer)
+RUN mvn dependency:go-offline -B || true
+
+# Copy source code
+COPY backend/src ./src
+
+# Expose port
+EXPOSE 8080
+
+# Run with spring-boot-devtools for hot reload
+CMD ["mvn", "spring-boot:run", "-Dspring-boot.run.jvmArguments=-Xmx512m"]
