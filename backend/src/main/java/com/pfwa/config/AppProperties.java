@@ -93,6 +93,8 @@ public class AppProperties {
         private int maxFailedLoginAttempts = 5;
         private int accountLockoutMinutes = 30;
         private int maxSessionsPerUser = 5;
+        private boolean secureCookies = true;
+        private String cookieSameSite = "Strict";
 
         public int getBcryptStrength() {
             return bcryptStrength;
@@ -124,6 +126,22 @@ public class AppProperties {
 
         public void setMaxSessionsPerUser(int maxSessionsPerUser) {
             this.maxSessionsPerUser = maxSessionsPerUser;
+        }
+
+        public boolean isSecureCookies() {
+            return secureCookies;
+        }
+
+        public void setSecureCookies(boolean secureCookies) {
+            this.secureCookies = secureCookies;
+        }
+
+        public String getCookieSameSite() {
+            return cookieSameSite;
+        }
+
+        public void setCookieSameSite(String cookieSameSite) {
+            this.cookieSameSite = cookieSameSite;
         }
     }
 

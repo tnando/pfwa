@@ -14,6 +14,7 @@ import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -231,6 +232,102 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponse.of(
                         "NOT_FOUND",
                         ex.getMessage(),
+                        request.getRequestURI()
+                ));
+    }
+
+    /**
+     * Handles transaction not found exception.
+     */
+    @ExceptionHandler(TransactionNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleTransactionNotFound(
+            TransactionNotFoundException ex,
+            HttpServletRequest request) {
+
+        logger.debug("Transaction not found on {}", request.getRequestURI());
+
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ErrorResponse.of(
+                        "NOT_FOUND",
+                        ex.getMessage(),
+                        request.getRequestURI()
+                ));
+    }
+
+    /**
+     * Handles category not found exception.
+     */
+    @ExceptionHandler(CategoryNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleCategoryNotFound(
+            CategoryNotFoundException ex,
+            HttpServletRequest request) {
+
+        logger.debug("Category not found on {}", request.getRequestURI());
+
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ErrorResponse.of(
+                        "NOT_FOUND",
+                        ex.getMessage(),
+                        request.getRequestURI()
+                ));
+    }
+
+    /**
+     * Handles category type mismatch exception.
+     */
+    @ExceptionHandler(CategoryTypeMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleCategoryTypeMismatch(
+            CategoryTypeMismatchException ex,
+            HttpServletRequest request) {
+
+        logger.debug("Category type mismatch on {}", request.getRequestURI());
+
+        List<FieldError> fieldErrors = List.of(
+                FieldError.of("categoryId", ex.getMessage(), "category.type.mismatch")
+        );
+
+        return ResponseEntity.badRequest()
+                .body(ErrorResponse.withFieldErrors(
+                        "VALIDATION_ERROR",
+                        "Validation failed",
+                        request.getRequestURI(),
+                        fieldErrors
+                ));
+    }
+
+    /**
+     * Handles transaction access denied exception.
+     */
+    @ExceptionHandler(TransactionAccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleTransactionAccessDenied(
+            TransactionAccessDeniedException ex,
+            HttpServletRequest request) {
+
+        logger.debug("Transaction access denied on {}", request.getRequestURI());
+
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ErrorResponse.of(
+                        "FORBIDDEN",
+                        ex.getMessage(),
+                        request.getRequestURI()
+                ));
+    }
+
+    /**
+     * Handles method argument type mismatch (e.g., invalid UUID format).
+     */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleTypeMismatch(
+            MethodArgumentTypeMismatchException ex,
+            HttpServletRequest request) {
+
+        logger.debug("Type mismatch on {}: {}", request.getRequestURI(), ex.getMessage());
+
+        String message = String.format("Invalid value for parameter '%s'", ex.getName());
+        return ResponseEntity.badRequest()
+                .body(ErrorResponse.of(
+                        "BAD_REQUEST",
+                        message,
                         request.getRequestURI()
                 ));
     }

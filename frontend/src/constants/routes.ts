@@ -14,6 +14,11 @@ export const ROUTES = {
   SETTINGS: '/settings',
   SESSIONS: '/settings/sessions',
 
+  // Transaction routes
+  TRANSACTIONS: '/transactions',
+  TRANSACTIONS_NEW: '/transactions/new',
+  TRANSACTIONS_EDIT: '/transactions/:id/edit',
+
   // Root
   HOME: '/',
 } as const;
