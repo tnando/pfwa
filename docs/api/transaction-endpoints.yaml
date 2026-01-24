@@ -1,0 +1,1453 @@
+openapi: 3.0.3
+info:
+  title: PFWA Transactions API
+  description: |
+    Transactions API for the Personal Finance Web Application (PFWA).
+
+    This API provides endpoints for managing financial transactions including
+    income and expenses, categories, filtering, search, pagination, and summary statistics.
+
+    ## Authentication
+    All endpoints require JWT Bearer authentication. Tokens are stored in HttpOnly cookies
+    and automatically sent with requests. The `Authorization` header is also supported.
+
+    ## Rate Limiting
+    All endpoints are rate-limited. When exceeded, a 429 response is returned with
+    a `Retry-After` header indicating when the client can retry.
+
+    ## Error Handling
+    All error responses follow a consistent format with error codes and field-level
+    validation errors where applicable.
+
+    ## Pagination
+    List endpoints support pagination via `page` and `size` query parameters.
+    Default page size is 20, maximum is 100.
+
+    ## Sorting
+    List endpoints support sorting via the `sort` query parameter.
+    Format: `field,direction` (e.g., `date,desc`).
+  version: 1.0.0
+  contact:
+    name: PFWA Development Team
+    email: dev@pfwa.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Local development server
+  - url: https://api.pfwa.com/api/v1
+    description: Production server
+
+tags:
+  - name: Transactions
+    description: Transaction CRUD operations
+  - name: Categories
+    description: Transaction category management
+  - name: Summary
+    description: Transaction statistics and summaries
+
+paths:
+  /transactions:
+    get:
+      tags:
+        - Transactions
+      summary: List transactions with filtering and pagination
+      description: |
+        Retrieves a paginated list of transactions for the authenticated user.
+        Supports filtering by date range, type, categories, amount range, and text search.
+        Results are sorted by date descending by default.
+
+        **Rate Limit:** 60 requests per minute per user.
+      operationId: listTransactions
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/X-Request-ID'
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/SizeParam'
+        - $ref: '#/components/parameters/SortParam'
+        - name: startDate
+          in: query
+          description: Filter transactions on or after this date (inclusive)
+          schema:
+            type: string
+            format: date
+          example: "2026-01-01"
+        - name: endDate
+          in: query
+          description: Filter transactions on or before this date (inclusive)
+          schema:
+            type: string
+            format: date
+          example: "2026-01-31"
+        - name: type
+          in: query
+          description: Filter by transaction type
+          schema:
+            $ref: '#/components/schemas/TransactionType'
+        - name: categoryIds
+          in: query
+          description: Filter by category IDs (comma-separated for multiple)
+          schema:
+            type: array
+            items:
+              type: string
+              format: uuid
+          style: form
+          explode: false
+          example: "550e8400-e29b-41d4-a716-446655440001,550e8400-e29b-41d4-a716-446655440002"
+        - name: minAmount
+          in: query
+          description: Filter transactions with amount greater than or equal to this value
+          schema:
+            type: number
+            format: decimal
+            minimum: 0
+          example: 50.00
+        - name: maxAmount
+          in: query
+          description: Filter transactions with amount less than or equal to this value
+          schema:
+            type: number
+            format: decimal
+            minimum: 0
+          example: 500.00
+        - name: search
+          in: query
+          description: |
+            Search transactions by description or notes (case-insensitive, partial match).
+            Minimum 2 characters required.
+          schema:
+            type: string
+            minLength: 2
+            maxLength: 100
+          example: "grocery"
+      responses:
+        '200':
+          description: Transactions retrieved successfully
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionListResponse'
+              example:
+                content:
+                  - id: "550e8400-e29b-41d4-a716-446655440000"
+                    amount: 150.00
+                    type: "EXPENSE"
+                    category:
+                      id: "550e8400-e29b-41d4-a716-446655440010"
+                      name: "Food & Dining"
+                      type: "EXPENSE"
+                      icon: "restaurant"
+                      color: "#F44336"
+                    date: "2026-01-20"
+                    description: "Grocery shopping at Whole Foods"
+                    notes: "Weekly groceries"
+                    createdAt: "2026-01-20T14:30:00Z"
+                    updatedAt: "2026-01-20T14:30:00Z"
+                page: 0
+                size: 20
+                totalElements: 125
+                totalPages: 7
+                first: true
+                last: false
+                summary:
+                  totalIncome: 5000.00
+                  totalExpenses: 3250.50
+                  netBalance: 1749.50
+                appliedFilters:
+                  startDate: null
+                  endDate: null
+                  type: null
+                  categoryIds: []
+                  minAmount: null
+                  maxAmount: null
+                  search: null
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      tags:
+        - Transactions
+      summary: Create a new transaction
+      description: |
+        Creates a new income or expense transaction for the authenticated user.
+        The transaction is associated with a category matching the transaction type.
+
+        **Rate Limit:** 30 requests per minute per user.
+      operationId: createTransaction
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/X-Request-ID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTransactionRequest'
+            examples:
+              expenseTransaction:
+                summary: Create expense transaction
+                value:
+                  amount: 150.00
+                  type: "EXPENSE"
+                  categoryId: "550e8400-e29b-41d4-a716-446655440010"
+                  date: "2026-01-20"
+                  description: "Grocery shopping at Whole Foods"
+                  notes: "Weekly groceries"
+              incomeTransaction:
+                summary: Create income transaction
+                value:
+                  amount: 5000.00
+                  type: "INCOME"
+                  categoryId: "550e8400-e29b-41d4-a716-446655440001"
+                  date: "2026-01-15"
+                  description: "Monthly salary"
+                  notes: "January 2026 paycheck"
+      responses:
+        '201':
+          description: Transaction created successfully
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+            Location:
+              description: URL of the created transaction
+              schema:
+                type: string
+              example: "/api/v1/transactions/550e8400-e29b-41d4-a716-446655440000"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionResponse'
+              example:
+                id: "550e8400-e29b-41d4-a716-446655440000"
+                amount: 150.00
+                type: "EXPENSE"
+                category:
+                  id: "550e8400-e29b-41d4-a716-446655440010"
+                  name: "Food & Dining"
+                  type: "EXPENSE"
+                  icon: "restaurant"
+                  color: "#F44336"
+                date: "2026-01-20"
+                description: "Grocery shopping at Whole Foods"
+                notes: "Weekly groceries"
+                createdAt: "2026-01-20T14:30:00Z"
+                updatedAt: "2026-01-20T14:30:00Z"
+        '400':
+          description: Validation error
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                amountInvalid:
+                  summary: Invalid amount
+                  value:
+                    error: "VALIDATION_ERROR"
+                    message: "Validation failed"
+                    timestamp: "2026-01-23T10:30:00Z"
+                    path: "/api/v1/transactions"
+                    fieldErrors:
+                      - field: "amount"
+                        message: "Amount must be greater than 0"
+                        code: "amount.positive"
+                categoryTypeMismatch:
+                  summary: Category type mismatch
+                  value:
+                    error: "VALIDATION_ERROR"
+                    message: "Validation failed"
+                    timestamp: "2026-01-23T10:30:00Z"
+                    path: "/api/v1/transactions"
+                    fieldErrors:
+                      - field: "categoryId"
+                        message: "Category type must match transaction type"
+                        code: "category.type.mismatch"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Category not found
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "NOT_FOUND"
+                message: "Category not found"
+                timestamp: "2026-01-23T10:30:00Z"
+                path: "/api/v1/transactions"
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /transactions/{id}:
+    get:
+      tags:
+        - Transactions
+      summary: Get transaction by ID
+      description: |
+        Retrieves a specific transaction by its unique identifier.
+        Users can only access their own transactions.
+      operationId: getTransaction
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/X-Request-ID'
+        - $ref: '#/components/parameters/TransactionIdParam'
+      responses:
+        '200':
+          description: Transaction retrieved successfully
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    put:
+      tags:
+        - Transactions
+      summary: Update transaction
+      description: |
+        Updates an existing transaction. All fields except `id`, `createdAt`, and `userId`
+        can be modified. Users can only update their own transactions.
+
+        When changing the transaction type, the category must also be changed to one
+        matching the new type.
+
+        **Rate Limit:** 30 requests per minute per user.
+      operationId: updateTransaction
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/X-Request-ID'
+        - $ref: '#/components/parameters/TransactionIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTransactionRequest'
+            example:
+              amount: 175.00
+              type: "EXPENSE"
+              categoryId: "550e8400-e29b-41d4-a716-446655440010"
+              date: "2026-01-20"
+              description: "Updated grocery shopping"
+              notes: "Added extra items"
+      responses:
+        '200':
+          description: Transaction updated successfully
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionResponse'
+              example:
+                id: "550e8400-e29b-41d4-a716-446655440000"
+                amount: 175.00
+                type: "EXPENSE"
+                category:
+                  id: "550e8400-e29b-41d4-a716-446655440010"
+                  name: "Food & Dining"
+                  type: "EXPENSE"
+                  icon: "restaurant"
+                  color: "#F44336"
+                date: "2026-01-20"
+                description: "Updated grocery shopping"
+                notes: "Added extra items"
+                createdAt: "2026-01-20T14:30:00Z"
+                updatedAt: "2026-01-20T15:45:00Z"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete:
+      tags:
+        - Transactions
+      summary: Delete transaction
+      description: |
+        Permanently deletes a transaction. Users can only delete their own transactions.
+        This action cannot be undone.
+
+        If the transaction is linked to a budget, the budget progress will be recalculated.
+
+        **Rate Limit:** 30 requests per minute per user.
+      operationId: deleteTransaction
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/X-Request-ID'
+        - $ref: '#/components/parameters/TransactionIdParam'
+      responses:
+        '204':
+          description: Transaction deleted successfully
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /transactions/summary:
+    get:
+      tags:
+        - Summary
+      summary: Get transaction summary and statistics
+      description: |
+        Retrieves summary statistics for the authenticated user's transactions
+        including totals by type, category breakdown, and comparison with previous period.
+
+        Supports the same date range filters as the transaction list endpoint.
+
+        **Rate Limit:** 30 requests per minute per user.
+      operationId: getTransactionSummary
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/X-Request-ID'
+        - name: startDate
+          in: query
+          description: Start date for summary period (inclusive)
+          schema:
+            type: string
+            format: date
+          example: "2026-01-01"
+        - name: endDate
+          in: query
+          description: End date for summary period (inclusive)
+          schema:
+            type: string
+            format: date
+          example: "2026-01-31"
+      responses:
+        '200':
+          description: Summary retrieved successfully
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionSummaryResponse'
+              example:
+                period:
+                  startDate: "2026-01-01"
+                  endDate: "2026-01-31"
+                totals:
+                  income: 5000.00
+                  expenses: 3250.50
+                  net: 1749.50
+                  transactionCount: 87
+                categoryBreakdown:
+                  income:
+                    - category:
+                        id: "550e8400-e29b-41d4-a716-446655440001"
+                        name: "Salary"
+                        icon: "payments"
+                        color: "#4CAF50"
+                      total: 4500.00
+                      percentage: 90.0
+                      transactionCount: 2
+                    - category:
+                        id: "550e8400-e29b-41d4-a716-446655440002"
+                        name: "Freelance"
+                        icon: "work"
+                        color: "#8BC34A"
+                      total: 500.00
+                      percentage: 10.0
+                      transactionCount: 1
+                  expense:
+                    - category:
+                        id: "550e8400-e29b-41d4-a716-446655440010"
+                        name: "Food & Dining"
+                        icon: "restaurant"
+                        color: "#F44336"
+                      total: 850.00
+                      percentage: 26.15
+                      transactionCount: 18
+                    - category:
+                        id: "550e8400-e29b-41d4-a716-446655440011"
+                        name: "Transportation"
+                        icon: "directions_car"
+                        color: "#E91E63"
+                      total: 400.00
+                      percentage: 12.31
+                      transactionCount: 8
+                comparison:
+                  previousPeriod:
+                    startDate: "2025-12-01"
+                    endDate: "2025-12-31"
+                    income: 4500.00
+                    expenses: 2800.00
+                    net: 1700.00
+                  change:
+                    income: "+11.1%"
+                    expenses: "+16.1%"
+                    net: "+2.9%"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /categories:
+    get:
+      tags:
+        - Categories
+      summary: Get all transaction categories
+      description: |
+        Retrieves all available transaction categories grouped by type (INCOME/EXPENSE).
+        Categories are system-defined and cannot be modified by users in the MVP.
+
+        This endpoint should be cached by clients as categories rarely change.
+
+        **Rate Limit:** 60 requests per minute per user.
+      operationId: getCategories
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/X-Request-ID'
+        - name: type
+          in: query
+          description: Filter categories by type
+          schema:
+            $ref: '#/components/schemas/TransactionType'
+      responses:
+        '200':
+          description: Categories retrieved successfully
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/X-Request-ID'
+            Cache-Control:
+              description: Caching directive
+              schema:
+                type: string
+              example: "max-age=3600"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoriesResponse'
+              example:
+                income:
+                  - id: "550e8400-e29b-41d4-a716-446655440001"
+                    name: "Salary"
+                    type: "INCOME"
+                    icon: "payments"
+                    color: "#4CAF50"
+                  - id: "550e8400-e29b-41d4-a716-446655440002"
+                    name: "Freelance"
+                    type: "INCOME"
+                    icon: "work"
+                    color: "#8BC34A"
+                  - id: "550e8400-e29b-41d4-a716-446655440003"
+                    name: "Investments"
+                    type: "INCOME"
+                    icon: "trending_up"
+                    color: "#66BB6A"
+                  - id: "550e8400-e29b-41d4-a716-446655440004"
+                    name: "Gifts"
+                    type: "INCOME"
+                    icon: "card_giftcard"
+                    color: "#81C784"
+                  - id: "550e8400-e29b-41d4-a716-446655440005"
+                    name: "Refunds"
+                    type: "INCOME"
+                    icon: "receipt"
+                    color: "#9CCC65"
+                  - id: "550e8400-e29b-41d4-a716-446655440006"
+                    name: "Other Income"
+                    type: "INCOME"
+                    icon: "attach_money"
+                    color: "#AED581"
+                expense:
+                  - id: "550e8400-e29b-41d4-a716-446655440010"
+                    name: "Food & Dining"
+                    type: "EXPENSE"
+                    icon: "restaurant"
+                    color: "#F44336"
+                  - id: "550e8400-e29b-41d4-a716-446655440011"
+                    name: "Transportation"
+                    type: "EXPENSE"
+                    icon: "directions_car"
+                    color: "#E91E63"
+                  - id: "550e8400-e29b-41d4-a716-446655440012"
+                    name: "Housing"
+                    type: "EXPENSE"
+                    icon: "home"
+                    color: "#9C27B0"
+                  - id: "550e8400-e29b-41d4-a716-446655440013"
+                    name: "Utilities"
+                    type: "EXPENSE"
+                    icon: "bolt"
+                    color: "#673AB7"
+                  - id: "550e8400-e29b-41d4-a716-446655440014"
+                    name: "Entertainment"
+                    type: "EXPENSE"
+                    icon: "movie"
+                    color: "#3F51B5"
+                  - id: "550e8400-e29b-41d4-a716-446655440015"
+                    name: "Healthcare"
+                    type: "EXPENSE"
+                    icon: "local_hospital"
+                    color: "#2196F3"
+                  - id: "550e8400-e29b-41d4-a716-446655440016"
+                    name: "Shopping"
+                    type: "EXPENSE"
+                    icon: "shopping_bag"
+                    color: "#03A9F4"
+                  - id: "550e8400-e29b-41d4-a716-446655440017"
+                    name: "Education"
+                    type: "EXPENSE"
+                    icon: "school"
+                    color: "#00BCD4"
+                  - id: "550e8400-e29b-41d4-a716-446655440018"
+                    name: "Travel"
+                    type: "EXPENSE"
+                    icon: "flight"
+                    color: "#009688"
+                  - id: "550e8400-e29b-41d4-a716-446655440019"
+                    name: "Personal Care"
+                    type: "EXPENSE"
+                    icon: "spa"
+                    color: "#4CAF50"
+                  - id: "550e8400-e29b-41d4-a716-446655440020"
+                    name: "Subscriptions"
+                    type: "EXPENSE"
+                    icon: "subscriptions"
+                    color: "#8BC34A"
+                  - id: "550e8400-e29b-41d4-a716-446655440021"
+                    name: "Other"
+                    type: "EXPENSE"
+                    icon: "more_horiz"
+                    color: "#CDDC39"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT access token in Authorization header
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: accessToken
+      description: JWT access token in HttpOnly cookie
+
+  parameters:
+    X-Request-ID:
+      name: X-Request-ID
+      in: header
+      required: false
+      description: Unique identifier for request tracing. Generated by client or server.
+      schema:
+        type: string
+        format: uuid
+      example: "550e8400-e29b-41d4-a716-446655440000"
+
+    TransactionIdParam:
+      name: id
+      in: path
+      required: true
+      description: Unique identifier of the transaction
+      schema:
+        type: string
+        format: uuid
+      example: "550e8400-e29b-41d4-a716-446655440000"
+
+    PageParam:
+      name: page
+      in: query
+      description: Zero-based page index
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+      example: 0
+
+    SizeParam:
+      name: size
+      in: query
+      description: Number of items per page (max 100)
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+      example: 20
+
+    SortParam:
+      name: sort
+      in: query
+      description: |
+        Sort field and direction. Format: `field,direction`.
+        Supported fields: date, amount, category, createdAt.
+        Supported directions: asc, desc.
+      schema:
+        type: string
+        default: "date,desc"
+      example: "date,desc"
+
+  headers:
+    X-Request-ID:
+      description: Request identifier for tracing
+      schema:
+        type: string
+        format: uuid
+      example: "550e8400-e29b-41d4-a716-446655440000"
+
+  schemas:
+    # ==================== Enums ====================
+
+    TransactionType:
+      type: string
+      enum:
+        - INCOME
+        - EXPENSE
+      description: Type of transaction
+
+    # ==================== Request DTOs ====================
+
+    CreateTransactionRequest:
+      type: object
+      required:
+        - amount
+        - type
+        - categoryId
+        - date
+      properties:
+        amount:
+          type: number
+          format: decimal
+          minimum: 0.01
+          maximum: 10000000
+          description: Transaction amount (must be greater than 0)
+          example: 150.00
+        type:
+          $ref: '#/components/schemas/TransactionType'
+        categoryId:
+          type: string
+          format: uuid
+          description: ID of the category (must match transaction type)
+          example: "550e8400-e29b-41d4-a716-446655440010"
+        date:
+          type: string
+          format: date
+          description: Transaction date (cannot be more than 1 year in the past)
+          example: "2026-01-20"
+        description:
+          type: string
+          maxLength: 500
+          nullable: true
+          description: Brief description of the transaction
+          example: "Grocery shopping at Whole Foods"
+        notes:
+          type: string
+          maxLength: 1000
+          nullable: true
+          description: Additional notes about the transaction
+          example: "Weekly groceries"
+
+    UpdateTransactionRequest:
+      type: object
+      required:
+        - amount
+        - type
+        - categoryId
+        - date
+      properties:
+        amount:
+          type: number
+          format: decimal
+          minimum: 0.01
+          maximum: 10000000
+          description: Transaction amount (must be greater than 0)
+          example: 175.00
+        type:
+          $ref: '#/components/schemas/TransactionType'
+        categoryId:
+          type: string
+          format: uuid
+          description: ID of the category (must match transaction type)
+          example: "550e8400-e29b-41d4-a716-446655440010"
+        date:
+          type: string
+          format: date
+          description: Transaction date
+          example: "2026-01-20"
+        description:
+          type: string
+          maxLength: 500
+          nullable: true
+          description: Brief description of the transaction
+          example: "Updated grocery shopping"
+        notes:
+          type: string
+          maxLength: 1000
+          nullable: true
+          description: Additional notes about the transaction
+          example: "Added extra items"
+
+    # ==================== Response DTOs ====================
+
+    TransactionResponse:
+      type: object
+      required:
+        - id
+        - amount
+        - type
+        - category
+        - date
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier of the transaction
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        amount:
+          type: number
+          format: decimal
+          description: Transaction amount
+          example: 150.00
+        type:
+          $ref: '#/components/schemas/TransactionType'
+        category:
+          $ref: '#/components/schemas/CategoryResponse'
+        date:
+          type: string
+          format: date
+          description: Transaction date
+          example: "2026-01-20"
+        description:
+          type: string
+          nullable: true
+          description: Brief description of the transaction
+          example: "Grocery shopping at Whole Foods"
+        notes:
+          type: string
+          nullable: true
+          description: Additional notes about the transaction
+          example: "Weekly groceries"
+        createdAt:
+          type: string
+          format: date-time
+          description: Timestamp when the transaction was created
+          example: "2026-01-20T14:30:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the transaction was last updated
+          example: "2026-01-20T14:30:00Z"
+
+    TransactionListResponse:
+      type: object
+      required:
+        - content
+        - page
+        - size
+        - totalElements
+        - totalPages
+        - first
+        - last
+        - summary
+      properties:
+        content:
+          type: array
+          description: List of transactions
+          items:
+            $ref: '#/components/schemas/TransactionResponse'
+        page:
+          type: integer
+          description: Current page number (zero-based)
+          example: 0
+        size:
+          type: integer
+          description: Number of items per page
+          example: 20
+        totalElements:
+          type: integer
+          format: int64
+          description: Total number of transactions matching the query
+          example: 125
+        totalPages:
+          type: integer
+          description: Total number of pages
+          example: 7
+        first:
+          type: boolean
+          description: Whether this is the first page
+          example: true
+        last:
+          type: boolean
+          description: Whether this is the last page
+          example: false
+        summary:
+          $ref: '#/components/schemas/TransactionListSummary'
+        appliedFilters:
+          $ref: '#/components/schemas/AppliedFilters'
+
+    TransactionListSummary:
+      type: object
+      required:
+        - totalIncome
+        - totalExpenses
+        - netBalance
+      properties:
+        totalIncome:
+          type: number
+          format: decimal
+          description: Sum of all income transactions (filtered)
+          example: 5000.00
+        totalExpenses:
+          type: number
+          format: decimal
+          description: Sum of all expense transactions (filtered)
+          example: 3250.50
+        netBalance:
+          type: number
+          format: decimal
+          description: Net balance (income - expenses)
+          example: 1749.50
+
+    AppliedFilters:
+      type: object
+      description: Echo of the filters applied to the request
+      properties:
+        startDate:
+          type: string
+          format: date
+          nullable: true
+          example: "2026-01-01"
+        endDate:
+          type: string
+          format: date
+          nullable: true
+          example: "2026-01-31"
+        type:
+          $ref: '#/components/schemas/TransactionType'
+        categoryIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+          example: []
+        minAmount:
+          type: number
+          format: decimal
+          nullable: true
+          example: 50.00
+        maxAmount:
+          type: number
+          format: decimal
+          nullable: true
+          example: 500.00
+        search:
+          type: string
+          nullable: true
+          example: "grocery"
+
+    CategoryResponse:
+      type: object
+      required:
+        - id
+        - name
+        - type
+        - icon
+        - color
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier of the category
+          example: "550e8400-e29b-41d4-a716-446655440010"
+        name:
+          type: string
+          description: Display name of the category
+          example: "Food & Dining"
+        type:
+          $ref: '#/components/schemas/TransactionType'
+        icon:
+          type: string
+          description: Material icon name for the category
+          example: "restaurant"
+        color:
+          type: string
+          pattern: '^#[0-9A-Fa-f]{6}$'
+          description: Hex color code for the category
+          example: "#F44336"
+
+    CategoriesResponse:
+      type: object
+      required:
+        - income
+        - expense
+      properties:
+        income:
+          type: array
+          description: List of income categories
+          items:
+            $ref: '#/components/schemas/CategoryResponse'
+        expense:
+          type: array
+          description: List of expense categories
+          items:
+            $ref: '#/components/schemas/CategoryResponse'
+
+    TransactionSummaryResponse:
+      type: object
+      required:
+        - period
+        - totals
+        - categoryBreakdown
+      properties:
+        period:
+          $ref: '#/components/schemas/SummaryPeriod'
+        totals:
+          $ref: '#/components/schemas/SummaryTotals'
+        categoryBreakdown:
+          $ref: '#/components/schemas/CategoryBreakdown'
+        comparison:
+          $ref: '#/components/schemas/PeriodComparison'
+
+    SummaryPeriod:
+      type: object
+      required:
+        - startDate
+        - endDate
+      properties:
+        startDate:
+          type: string
+          format: date
+          description: Start of the summary period
+          example: "2026-01-01"
+        endDate:
+          type: string
+          format: date
+          description: End of the summary period
+          example: "2026-01-31"
+
+    SummaryTotals:
+      type: object
+      required:
+        - income
+        - expenses
+        - net
+        - transactionCount
+      properties:
+        income:
+          type: number
+          format: decimal
+          description: Total income for the period
+          example: 5000.00
+        expenses:
+          type: number
+          format: decimal
+          description: Total expenses for the period
+          example: 3250.50
+        net:
+          type: number
+          format: decimal
+          description: Net balance (income - expenses)
+          example: 1749.50
+        transactionCount:
+          type: integer
+          description: Total number of transactions in the period
+          example: 87
+
+    CategoryBreakdown:
+      type: object
+      required:
+        - income
+        - expense
+      properties:
+        income:
+          type: array
+          description: Breakdown of income by category
+          items:
+            $ref: '#/components/schemas/CategoryBreakdownItem'
+        expense:
+          type: array
+          description: Breakdown of expenses by category
+          items:
+            $ref: '#/components/schemas/CategoryBreakdownItem'
+
+    CategoryBreakdownItem:
+      type: object
+      required:
+        - category
+        - total
+        - percentage
+        - transactionCount
+      properties:
+        category:
+          $ref: '#/components/schemas/CategorySummary'
+        total:
+          type: number
+          format: decimal
+          description: Total amount for this category
+          example: 850.00
+        percentage:
+          type: number
+          format: decimal
+          minimum: 0
+          maximum: 100
+          description: Percentage of total for this type
+          example: 26.15
+        transactionCount:
+          type: integer
+          description: Number of transactions in this category
+          example: 18
+
+    CategorySummary:
+      type: object
+      required:
+        - id
+        - name
+        - icon
+        - color
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440010"
+        name:
+          type: string
+          example: "Food & Dining"
+        icon:
+          type: string
+          example: "restaurant"
+        color:
+          type: string
+          example: "#F44336"
+
+    PeriodComparison:
+      type: object
+      required:
+        - previousPeriod
+        - change
+      properties:
+        previousPeriod:
+          $ref: '#/components/schemas/PreviousPeriodSummary'
+        change:
+          $ref: '#/components/schemas/PeriodChange'
+
+    PreviousPeriodSummary:
+      type: object
+      required:
+        - startDate
+        - endDate
+        - income
+        - expenses
+        - net
+      properties:
+        startDate:
+          type: string
+          format: date
+          example: "2025-12-01"
+        endDate:
+          type: string
+          format: date
+          example: "2025-12-31"
+        income:
+          type: number
+          format: decimal
+          example: 4500.00
+        expenses:
+          type: number
+          format: decimal
+          example: 2800.00
+        net:
+          type: number
+          format: decimal
+          example: 1700.00
+
+    PeriodChange:
+      type: object
+      required:
+        - income
+        - expenses
+        - net
+      properties:
+        income:
+          type: string
+          description: Percentage change in income (formatted string)
+          example: "+11.1%"
+        expenses:
+          type: string
+          description: Percentage change in expenses (formatted string)
+          example: "+16.1%"
+        net:
+          type: string
+          description: Percentage change in net balance (formatted string)
+          example: "+2.9%"
+
+    # ==================== Error DTOs ====================
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+        - timestamp
+        - path
+      properties:
+        error:
+          type: string
+          description: Error code for programmatic handling
+          enum:
+            - BAD_REQUEST
+            - VALIDATION_ERROR
+            - UNAUTHORIZED
+            - FORBIDDEN
+            - NOT_FOUND
+            - CONFLICT
+            - TOO_MANY_REQUESTS
+            - INTERNAL_SERVER_ERROR
+          example: "VALIDATION_ERROR"
+        message:
+          type: string
+          description: Human-readable error message
+          example: "Validation failed"
+        timestamp:
+          type: string
+          format: date-time
+          description: When the error occurred
+          example: "2026-01-23T10:30:00Z"
+        path:
+          type: string
+          description: The API path that was called
+          example: "/api/v1/transactions"
+        requestId:
+          type: string
+          format: uuid
+          description: Request identifier for troubleshooting
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        fieldErrors:
+          type: array
+          description: Field-level validation errors (present for VALIDATION_ERROR)
+          items:
+            $ref: '#/components/schemas/FieldError'
+
+    FieldError:
+      type: object
+      required:
+        - field
+        - message
+        - code
+      properties:
+        field:
+          type: string
+          description: The field that failed validation
+          example: "amount"
+        message:
+          type: string
+          description: Human-readable error message
+          example: "Amount must be greater than 0"
+        code:
+          type: string
+          description: Error code for programmatic handling
+          example: "amount.positive"
+        rejectedValue:
+          type: string
+          nullable: true
+          description: The value that was rejected
+          example: "-50.00"
+
+  responses:
+    BadRequest:
+      description: Invalid request body or parameters
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/X-Request-ID'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            validationError:
+              summary: Field validation error
+              value:
+                error: "VALIDATION_ERROR"
+                message: "Validation failed"
+                timestamp: "2026-01-23T10:30:00Z"
+                path: "/api/v1/transactions"
+                fieldErrors:
+                  - field: "amount"
+                    message: "Amount must be greater than 0"
+                    code: "amount.positive"
+                  - field: "categoryId"
+                    message: "Category is required"
+                    code: "category.required"
+            invalidDateRange:
+              summary: Invalid date range
+              value:
+                error: "BAD_REQUEST"
+                message: "Start date must be before or equal to end date"
+                timestamp: "2026-01-23T10:30:00Z"
+                path: "/api/v1/transactions"
+
+    Unauthorized:
+      description: Authentication required or invalid credentials
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/X-Request-ID'
+        WWW-Authenticate:
+          description: Authentication challenge
+          schema:
+            type: string
+          example: "Bearer realm=\"pfwa\", error=\"invalid_token\""
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "UNAUTHORIZED"
+            message: "Authentication required"
+            timestamp: "2026-01-23T10:30:00Z"
+            path: "/api/v1/transactions"
+
+    Forbidden:
+      description: Insufficient permissions or resource belongs to another user
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/X-Request-ID'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "FORBIDDEN"
+            message: "You do not have permission to access this transaction"
+            timestamp: "2026-01-23T10:30:00Z"
+            path: "/api/v1/transactions/550e8400-e29b-41d4-a716-446655440000"
+
+    NotFound:
+      description: Resource not found
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/X-Request-ID'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "NOT_FOUND"
+            message: "Transaction not found"
+            timestamp: "2026-01-23T10:30:00Z"
+            path: "/api/v1/transactions/550e8400-e29b-41d4-a716-446655440000"
+
+    TooManyRequests:
+      description: Rate limit exceeded
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/X-Request-ID'
+        Retry-After:
+          description: Seconds until the rate limit resets
+          schema:
+            type: integer
+          example: 60
+        X-RateLimit-Limit:
+          description: Request limit per window
+          schema:
+            type: integer
+          example: 60
+        X-RateLimit-Remaining:
+          description: Remaining requests in current window
+          schema:
+            type: integer
+          example: 0
+        X-RateLimit-Reset:
+          description: Unix timestamp when the rate limit resets
+          schema:
+            type: integer
+          example: 1705833060
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "TOO_MANY_REQUESTS"
+            message: "Too many requests. Please try again later."
+            timestamp: "2026-01-23T10:30:00Z"
+            path: "/api/v1/transactions"
+
+    InternalServerError:
+      description: Unexpected server error
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/X-Request-ID'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "INTERNAL_SERVER_ERROR"
+            message: "An unexpected error occurred. Please try again later."
+            timestamp: "2026-01-23T10:30:00Z"
+            path: "/api/v1/transactions"
+            requestId: "550e8400-e29b-41d4-a716-446655440000"
