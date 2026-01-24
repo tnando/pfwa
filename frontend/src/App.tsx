@@ -11,6 +11,9 @@ import {
   VerifyEmailPage,
   DashboardPage,
   SettingsPage,
+  TransactionsPage,
+  CreateTransactionPage,
+  EditTransactionPage,
 } from '@/pages';
 import { ROUTES } from '@/constants';
 
@@ -104,6 +107,32 @@ const AppRoutes: React.FC = () => {
         element={
           <ProtectedRoute>
             <SettingsPage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Transaction routes */}
+      <Route
+        path={ROUTES.TRANSACTIONS}
+        element={
+          <ProtectedRoute>
+            <TransactionsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path={ROUTES.TRANSACTIONS_NEW}
+        element={
+          <ProtectedRoute>
+            <CreateTransactionPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path={ROUTES.TRANSACTIONS_EDIT}
+        element={
+          <ProtectedRoute>
+            <EditTransactionPage />
           </ProtectedRoute>
         }
       />

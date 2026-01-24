@@ -10,9 +10,15 @@ import {
   MenuItem,
   Avatar,
   Button,
+  Card,
+  CardContent,
+  CardActions,
+  Grid,
 } from '@mui/material';
 import { AccountCircle, Logout, Settings } from '@mui/icons-material';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
+import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
+import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context';
 import { ROUTES } from '@/constants';
@@ -111,17 +117,92 @@ const DashboardPage: React.FC = () => {
 
       {/* Main Content */}
       <Container maxWidth="lg" sx={{ flexGrow: 1, py: 4 }}>
-        <Box sx={{ textAlign: 'center', py: 8 }}>
+        <Box sx={{ mb: 4 }}>
           <Typography variant="h4" component="h1" gutterBottom>
             Welcome{user?.firstName ? `, ${user.firstName}` : ''}!
           </Typography>
-          <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
+          <Typography variant="body1" color="text.secondary">
             Your personal finance dashboard. Start tracking your income, expenses, and budgets.
           </Typography>
-          <Button variant="contained" size="large" disabled>
-            Coming Soon: Add Transaction
-          </Button>
         </Box>
+
+        {/* Quick Actions */}
+        <Grid container spacing={3}>
+          {/* Transactions Card */}
+          <Grid item xs={12} sm={6} md={4}>
+            <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+              <CardContent sx={{ flexGrow: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                  <ReceiptLongIcon color="primary" sx={{ fontSize: 40, mr: 2 }} />
+                  <Typography variant="h6" component="h2">
+                    Transactions
+                  </Typography>
+                </Box>
+                <Typography variant="body2" color="text.secondary">
+                  View and manage all your income and expense transactions. Filter by date, category, or amount.
+                </Typography>
+              </CardContent>
+              <CardActions sx={{ p: 2, pt: 0 }}>
+                <Button
+                  variant="contained"
+                  onClick={() => navigate(ROUTES.TRANSACTIONS)}
+                  fullWidth
+                >
+                  View Transactions
+                </Button>
+              </CardActions>
+            </Card>
+          </Grid>
+
+          {/* Add Transaction Card */}
+          <Grid item xs={12} sm={6} md={4}>
+            <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+              <CardContent sx={{ flexGrow: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                  <AddCircleOutlineIcon color="success" sx={{ fontSize: 40, mr: 2 }} />
+                  <Typography variant="h6" component="h2">
+                    Add Transaction
+                  </Typography>
+                </Box>
+                <Typography variant="body2" color="text.secondary">
+                  Record a new income or expense transaction to keep your finances up to date.
+                </Typography>
+              </CardContent>
+              <CardActions sx={{ p: 2, pt: 0 }}>
+                <Button
+                  variant="outlined"
+                  color="success"
+                  onClick={() => navigate(ROUTES.TRANSACTIONS_NEW)}
+                  fullWidth
+                >
+                  Add New
+                </Button>
+              </CardActions>
+            </Card>
+          </Grid>
+
+          {/* Budgets Card (Coming Soon) */}
+          <Grid item xs={12} sm={6} md={4}>
+            <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column', opacity: 0.7 }}>
+              <CardContent sx={{ flexGrow: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                  <AccountBalanceWalletIcon color="secondary" sx={{ fontSize: 40, mr: 2 }} />
+                  <Typography variant="h6" component="h2">
+                    Budgets
+                  </Typography>
+                </Box>
+                <Typography variant="body2" color="text.secondary">
+                  Set monthly budgets for different categories and track your spending progress.
+                </Typography>
+              </CardContent>
+              <CardActions sx={{ p: 2, pt: 0 }}>
+                <Button variant="outlined" disabled fullWidth>
+                  Coming Soon
+                </Button>
+              </CardActions>
+            </Card>
+          </Grid>
+        </Grid>
       </Container>
     </Box>
   );
