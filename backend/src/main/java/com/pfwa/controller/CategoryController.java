@@ -18,7 +18,7 @@ import java.util.concurrent.TimeUnit;
  * REST controller for transaction categories.
  */
 @RestController
-@RequestMapping("/api/v1/categories")
+@RequestMapping("/categories")
 public class CategoryController {
 
     private static final Logger logger = LoggerFactory.getLogger(CategoryController.class);

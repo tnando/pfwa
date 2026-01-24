@@ -25,7 +25,7 @@ import java.util.UUID;
  * REST controller for managing transactions.
  */
 @RestController
-@RequestMapping("/api/v1/transactions")
+@RequestMapping("/transactions")
 public class TransactionController {
 
     private static final Logger logger = LoggerFactory.getLogger(TransactionController.class);

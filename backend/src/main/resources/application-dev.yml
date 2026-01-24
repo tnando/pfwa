@@ -29,6 +29,11 @@ logging:
 
 # App specific dev settings
 app:
+  # Disable secure cookies for HTTP development
+  security:
+    secure-cookies: false
+    cookie-same-site: Lax
+
   # Relaxed rate limits for development
   rate-limit:
     registration:

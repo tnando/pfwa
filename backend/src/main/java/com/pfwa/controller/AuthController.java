@@ -250,10 +250,13 @@ public class AuthController {
      * Sets the access token as an HttpOnly cookie.
      */
     private void setAccessTokenCookie(HttpServletResponse response, String token) {
+        boolean secure = appProperties.getSecurity().isSecureCookies();
+        String sameSite = appProperties.getSecurity().getCookieSameSite();
+
         ResponseCookie cookie = ResponseCookie.from(ACCESS_TOKEN_COOKIE, token)
                 .httpOnly(true)
-                .secure(true)
-                .sameSite("Strict")
+                .secure(secure)
+                .sameSite(sameSite)
                 .path("/")
                 .maxAge(Duration.ofMinutes(appProperties.getJwt().getAccessTokenExpirationMinutes()))
                 .build();
@@ -269,10 +272,13 @@ public class AuthController {
                 appProperties.getJwt().getRefreshTokenRememberMeDays() :
                 appProperties.getJwt().getRefreshTokenExpirationDays();
 
+        boolean secure = appProperties.getSecurity().isSecureCookies();
+        String sameSite = appProperties.getSecurity().getCookieSameSite();
+
         ResponseCookie cookie = ResponseCookie.from(REFRESH_TOKEN_COOKIE, token)
                 .httpOnly(true)
-                .secure(true)
-                .sameSite("Strict")
+                .secure(secure)
+                .sameSite(sameSite)
                 .path("/api/v1/auth")
                 .maxAge(Duration.ofDays(expirationDays))
                 .build();
@@ -284,18 +290,21 @@ public class AuthController {
      * Clears authentication cookies.
      */
     private void clearAuthCookies(HttpServletResponse response) {
+        boolean secure = appProperties.getSecurity().isSecureCookies();
+        String sameSite = appProperties.getSecurity().getCookieSameSite();
+
         ResponseCookie clearAccessToken = ResponseCookie.from(ACCESS_TOKEN_COOKIE, "")
                 .httpOnly(true)
-                .secure(true)
-                .sameSite("Strict")
+                .secure(secure)
+                .sameSite(sameSite)
                 .path("/")
                 .maxAge(0)
                 .build();
 
         ResponseCookie clearRefreshToken = ResponseCookie.from(REFRESH_TOKEN_COOKIE, "")
                 .httpOnly(true)
-                .secure(true)
-                .sameSite("Strict")
+                .secure(secure)
+                .sameSite(sameSite)
                 .path("/api/v1/auth")
                 .maxAge(0)
                 .build();
